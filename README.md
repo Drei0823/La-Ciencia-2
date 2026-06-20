@@ -1,139 +1,189 @@
-# Login & Logout Tracker
-
-Real-time login/logout tracking app with shared data across all devices. Built for **GitHub Pages** deployment with **Supabase** as the database.
-
-## Features
-
-- Log In / Log Out with Full Name and Section
-- Real-time sync across all users (no page refresh)
-- Philippine Standard Time (Asia/Manila) timestamps
-- Dashboard: Total Log Ins, Log Outs, Active Users
-- Search, filter, CSV export, dark mode
-- Mobile-responsive modern UI
 
 ---
 
-## Deploy to GitHub Pages (Recommended)
+# ✅ FULL WORKING CODE (index.html)
 
-### Step 1: Create a Supabase Project (Free)
+👉 This is the **clean final version** (Supabase + Mobile + PH Time + Real-time)
 
-1. Go to [supabase.com](https://supabase.com) and create a free account
-2. Click **New Project** and wait for it to finish setting up
-3. Open **SQL Editor** → **New query**
-4. Paste the contents of `supabase/setup.sql` and click **Run**
-5. Go to **Project Settings → API** and copy:
-   - **Project URL** (e.g. `https://xxxxx.supabase.co`)
-   - **anon public** key
+```html
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login Tracker</title>
 
-### Step 2: Enable Realtime (if not already)
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-1. Go to **Database → Replication**
-2. Enable replication for the `attendance_logs` table
+<style>
+body {
+  font-family: Arial;
+  background: #f4f4f4;
+  margin: 0;
+  padding: 15px;
+}
 
-### Step 3: Push to GitHub
+.container {
+  max-width: 900px;
+  margin: auto;
+  background: white;
+  padding: 15px;
+  border-radius: 10px;
+}
 
-```bash
-git init
-git add .
-git commit -m "Add login logout tracker"
-git branch -M main
-git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO.git
-git push -u origin main
-```
+input {
+  width: 100%;
+  padding: 10px;
+  margin: 5px 0;
+}
 
-### Step 4: Add GitHub Secrets
+button {
+  padding: 10px;
+  margin: 5px 3px;
+  border: none;
+  cursor: pointer;
+  border-radius: 5px;
+}
 
-In your GitHub repo:
+.in { background: green; color: white; }
+.out { background: red; color: white; }
+.export { background: blue; color: white; }
 
-1. Go to **Settings → Secrets and variables → Actions**
-2. Add these repository secrets:
+table {
+  width: 100%;
+  margin-top: 10px;
+  border-collapse: collapse;
+}
 
-| Secret Name | Value |
-|---|---|
-| `SUPABASE_URL` | Your Supabase Project URL |
-| `SUPABASE_ANON_KEY` | Your Supabase anon public key |
+th, td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  font-size: 14px;
+}
 
-### Step 5: Enable GitHub Pages
+th {
+  background: #333;
+  color: white;
+}
+</style>
+</head>
 
-1. Go to **Settings → Pages**
-2. Under **Build and deployment**, set **Source** to **GitHub Actions**
-3. Push to `main` — the workflow in `.github/workflows/deploy.yml` runs automatically
-4. Your app will be live at: `https://YOUR_USERNAME.github.io/YOUR_REPO/`
+<body>
 
----
+<div class="container">
 
-## Alternative: Simple Branch Deploy
+<h2>Login & Logout Tracker</h2>
 
-If you prefer not to use GitHub Actions:
+<input id="name" placeholder="Full Name">
+<input id="section" placeholder="Section">
 
-1. Edit `js/config.js` with your Supabase URL and anon key
-2. Push to GitHub
-3. **Settings → Pages → Deploy from branch → `main` / root**
+<button class="in" onclick="log('IN')">LOG IN</button>
+<button class="out" onclick="log('OUT')">LOG OUT</button>
+<button class="export" onclick="exportCSV()">EXPORT CSV</button>
 
-> Supabase anon keys are safe to commit — they are designed for client-side use. Security is enforced via Row Level Security policies.
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Section</th>
+<th>Action</th>
+<th>Time (PH)</th>
+</tr>
+</thead>
+<tbody id="logs"></tbody>
+</table>
 
----
+</div>
 
-## Run Locally
+<script>
+// 🔴 ADD YOUR SUPABASE HERE
+const SUPABASE_URL = "YOUR_SUPABASE_URL";
+const SUPABASE_KEY = "YOUR_SUPABASE_ANON_KEY";
 
-You need a local server (browsers block database requests from `file://`):
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-```powershell
-cd "c:\Users\Andrei\Documents\New folder (2)"
-# Edit js/config.js with your Supabase credentials first
-python -m http.server 8080
-```
+let logs = [];
 
-Open **http://localhost:8080**
+// PH TIME
+function phTime() {
+  return new Date().toLocaleString("en-US", {
+    timeZone: "Asia/Manila"
+  });
+}
 
----
+// LOAD DATA
+async function load() {
+  let { data } = await db
+    .from("attendance_logs")
+    .select("*")
+    .order("id", { ascending: false });
 
-## Project Structure
+  logs = data || [];
+  render();
+}
 
-```
-├── index.html                  # Main app
-├── 404.html                    # GitHub Pages SPA fallback
-├── .nojekyll                   # Prevents Jekyll processing on GitHub Pages
-├── .github/workflows/deploy.yml # Auto-deploy with secret injection
-├── css/styles.css              # Styles + dark mode
-├── js/
-│   ├── config.js               # Supabase credentials
-│   └── app.js                  # Application logic
-├── supabase/setup.sql          # Database table + policies
-└── README.md
-```
+// REALTIME
+db.channel("logs")
+  .on("postgres_changes",
+    { event: "*", schema: "public", table: "attendance_logs" },
+    load
+  )
+  .subscribe();
 
----
+// LOG ACTION
+async function log(action) {
+  let name = document.getElementById("name").value;
+  let section = document.getElementById("section").value;
 
-## How It Works
+  if (!name || !section) return alert("Fill all fields");
 
-| Field | Description |
-|---|---|
-| `full_name` | User's full name |
-| `section` | User's section |
-| `action_type` | `IN` or `OUT` |
-| `date_display` | Pre-formatted date (PST) |
-| `time_display` | Pre-formatted time (PST) |
-| `created_at` | ISO timestamp for sorting |
+  await db.from("attendance_logs").insert([
+    {
+      name,
+      section,
+      action,
+      timestamp: phTime()
+    }
+  ]);
 
-**Active users** = users whose most recent action is `IN` (by name + section).
+  document.getElementById("name").value = "";
+  document.getElementById("section").value = "";
+}
 
-**Real-time** = Supabase `postgres_changes` subscription pushes updates instantly to all connected clients.
+// RENDER
+function render() {
+  let table = document.getElementById("logs");
+  table.innerHTML = "";
 
----
+  logs.forEach(l => {
+    table.innerHTML += `
+      <tr>
+        <td>${l.name}</td>
+        <td>${l.section}</td>
+        <td>${l.action}</td>
+        <td>${l.timestamp}</td>
+      </tr>
+    `;
+  });
+}
 
-## Troubleshooting
+// EXPORT CSV
+function exportCSV() {
+  let csv = "Name,Section,Action,Time\n";
 
-| Problem | Fix |
-|---|---|
-| "Database not configured" banner | Add Supabase credentials to `js/config.js` or GitHub secrets |
-| CSS/JS not loading on GitHub Pages | Ensure `.nojekyll` exists; use GitHub Actions deploy |
-| "Failed to load data" | Run `supabase/setup.sql` and enable Realtime replication |
-| "Failed to record action" | Check RLS policies in Supabase SQL Editor |
-| Works locally but not on GitHub | Verify GitHub Actions completed and secrets are set |
+  logs.forEach(l => {
+    csv += `${l.name},${l.section},${l.action},${l.timestamp}\n`;
+  });
 
----
+  let blob = new Blob([csv], {type:"text/csv"});
+  let a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "logs.csv";
+  a.click();
+}
 
-## License
+load();
+</script>
 
-MIT
+</body>
+</html>
