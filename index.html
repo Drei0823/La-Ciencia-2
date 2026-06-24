@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Login Tracker</title>
+
+<!-- Supabase v2 (FIXED IMPORT) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+body {
+  font-family: Arial;
+  margin: 0;
+  background: #f4f6f9;
+}
+
+.container {
+  max-width: 900px;
+  margin: auto;
+  padding: 15px;
+}
+
+.card {
+  background: white;
+  padding: 15px;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+input {
+  width: 100%;
+  padding: 10px;
+  margin: 5px 0;
+}
+
+button {
+  padding: 10px;
+  margin: 5px 3px;
+  border: none;
+  cursor: pointer;
+  border-radius: 5px;
+}
+
+.in { background: green; color: white; }
+.out { background: red; color: white; }
+
+table {
+  width: 100%;
+  margin-top: 10px;
+  border-collapse: collapse;
+}
+
+th, td {
+  border: 1px solid #ddd;
+  padding: 8px;
+}
+
+th {
+  background: #222;
+  color: white;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+<div class="card">
+
+<h2>Login & Logout Tracker</h2>
+
+<input id="name" placeholder="Full Name">
+<input id="section" placeholder="Section">
+
+<button class="in" onclick="logAction('IN')">LOG IN</button>
+<button class="out" onclick="logAction('OUT')">LOG OUT</button>
+
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Section</th>
+<th>Action</th>
+<th>Time (Philippines)</th>
+</tr>
+</thead>
+<tbody id="logs"></tbody>
+</table>
+
+</div>
+</div>
+
+<script>
+/* =========================
+   1. SUPABASE CONFIG (FIX THIS)
+========================= */
+const SUPABASE_URL = "https://YOUR_PROJECT.supabase.co";
+const SUPABASE_ANON_KEY = "YOUR_ANON_KEY";
+
+/* IMPORTANT FIX: correct initialization */
+const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* =========================
+   2. PH TIME FUNCTION
+========================= */
+function getPHTime() {
+  return new Date().toLocaleString("en-US", {
+    timeZone: "Asia/Manila",
+    year: "numeric",
+    month: "long",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+}
+
+/* =========================
+   3. LOAD DATA
+========================= */
+let logs = [];
+
+async function loadLogs() {
+  const { data, error } = await client
+    .from("attendance_logs")
+    .select("*")
+    .order("id", { ascending: false });
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+  logs = data;
+  render();
+}
+
+/* =========================
+   4. REALTIME FIXED
+========================= */
+client
+  .channel("logs-channel")
+  .on(
+    "postgres_changes",
+    {
+      event: "*",
+      schema: "public",
+      table: "attendance_logs"
+    },
+    () => loadLogs()
+  )
+  .subscribe();
+
+/* =========================
+   5. INSERT LOG
+========================= */
+async function logAction(action) {
+  const name = document.getElementById("name").value.trim();
+  const section = document.getElementById("section").value.trim();
+
+  if (!name || !section) {
+    alert("Please fill all fields");
+    return;
+  }
+
+  const { error } = await client
+    .from("attendance_logs")
+    .insert([
+      {
+        name,
+        section,
+        action,
+        timestamp: getPHTime()
+      }
+    ]);
+
+  if (error) {
+    console.error(error);
+    alert("Insert failed. Check Supabase setup.");
+    return;
+  }
+
+  document.getElementById("name").value = "";
+  document.getElementById("section").value = "";
+}
+
+/* =========================
+   6. RENDER TABLE
+========================= */
+function render() {
+  const table = document.getElementById("logs");
+  table.innerHTML = "";
+
+  logs.forEach(l => {
+    table.innerHTML += `
+      <tr>
+        <td>${l.name}</td>
+        <td>${l.section}</td>
+        <td>${l.action}</td>
+        <td>${l.timestamp}</td>
+      </tr>
+    `;
+  });
+}
+
+/* =========================
+   7. INIT
+========================= */
+loadLogs();
+</script>
+
+</body>
+</html>
